@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.duoc.gestor_biblioteca.dto.ComentarioRequest;
 import com.duoc.gestor_biblioteca.dto.ComentarioResponse;
+import com.duoc.gestor_biblioteca.security.UsuarioAutenticado;
 
 public interface ComentarioService {
 
@@ -12,6 +13,6 @@ public interface ComentarioService {
     ComentarioResponse crear(Long publicacionId, ComentarioRequest comentarioRequest, Long usuarioId,
             String usuarioNombre);
 
-    void eliminar(Long id);
+    void eliminar(Long id, UsuarioAutenticado usuario);
 
 }

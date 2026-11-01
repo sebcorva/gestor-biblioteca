@@ -2,6 +2,7 @@ package com.duoc.gestor_biblioteca.service;
 
 import java.util.List;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.duoc.gestor_biblioteca.dto.ComentarioRequest;
@@ -11,6 +12,7 @@ import com.duoc.gestor_biblioteca.model.Comentario;
 import com.duoc.gestor_biblioteca.model.Publicacion;
 import com.duoc.gestor_biblioteca.repository.ComentarioRepository;
 import com.duoc.gestor_biblioteca.repository.PublicacionRepository;
+import com.duoc.gestor_biblioteca.security.UsuarioAutenticado;
 
 import lombok.RequiredArgsConstructor;
 
@@ -51,10 +53,16 @@ public class ComentarioServiceImpl implements ComentarioService {
     }
 
     @Override
-    public void eliminar(Long id) {
-        if (!comentarioRepository.existsById(id)) {
-            throw new RecursoNoEncontradoException("No existe el comentario con id " + id);
+    public void eliminar(Long id, UsuarioAutenticado usuario) {
+        // 1. Existe? (404)  2. Es el autor o ADMIN? (403)
+        // findById y no existsById: se necesita el objeto para saber quien es el autor
+        Comentario comentario = comentarioRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No existe el comentario con id " + id));
+
+        boolean esAutor = comentario.getUsuarioId().equals(usuario.id());
+        if (!esAutor && !usuario.esAdmin()) {
+            throw new AccessDeniedException("Solo el autor o un administrador pueden eliminar este comentario");
         }
-        comentarioRepository.deleteById(id);
+        comentarioRepository.delete(comentario);
     }
 }

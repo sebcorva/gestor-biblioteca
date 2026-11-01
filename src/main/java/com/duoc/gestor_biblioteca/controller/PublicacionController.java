@@ -4,6 +4,8 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.duoc.gestor_biblioteca.dto.PublicacionRequest;
 import com.duoc.gestor_biblioteca.dto.PublicacionResponse;
+import com.duoc.gestor_biblioteca.security.UsuarioAutenticado;
 import com.duoc.gestor_biblioteca.service.PublicacionService;
 
 import jakarta.validation.Valid;
@@ -28,8 +31,6 @@ public class PublicacionController {
 
     private final PublicacionService publicacionService;
 
-    // GET /publicaciones        -> todas
-    // GET /publicaciones?q=cien -> busqueda en titulo o autor
     @GetMapping
     public ResponseEntity<List<PublicacionResponse>> getAllPublicaciones(
             @RequestParam(required = false) String q) {
@@ -43,24 +44,31 @@ public class PublicacionController {
         return ResponseEntity.ok(publicacion);
     }
 
+    // Solo usuarios premium o ADMIN pueden publicar
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('PREMIUM')")
     public ResponseEntity<PublicacionResponse> createPublicacion(
-            @Valid @RequestBody PublicacionRequest publicacionRequest) {
-        PublicacionResponse publicacionCreada = publicacionService.createPublicacion(publicacionRequest, 1L,
-                "Usuario_Demo");
+            @Valid @RequestBody PublicacionRequest publicacionRequest,
+            @AuthenticationPrincipal UsuarioAutenticado usuario) {
+        // El autor se toma del token
+        PublicacionResponse publicacionCreada = publicacionService.createPublicacion(publicacionRequest,
+                usuario.id(), usuario.nombre());
         return ResponseEntity.status(HttpStatus.CREATED).body(publicacionCreada);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<PublicacionResponse> updatePublicacion(@PathVariable Long id,
-            @Valid @RequestBody PublicacionRequest publicacionRequest) {
-        PublicacionResponse publicacionActualizada = publicacionService.updatePublicacion(id, publicacionRequest);
+            @Valid @RequestBody PublicacionRequest publicacionRequest,
+            @AuthenticationPrincipal UsuarioAutenticado usuario) {
+        PublicacionResponse publicacionActualizada = publicacionService.updatePublicacion(id, publicacionRequest,
+                usuario);
         return ResponseEntity.ok(publicacionActualizada);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deletePublicacion(@PathVariable Long id) {
-        publicacionService.deletePublicacion(id);
+    public ResponseEntity<Void> deletePublicacion(@PathVariable Long id,
+            @AuthenticationPrincipal UsuarioAutenticado usuario) {
+        publicacionService.deletePublicacion(id, usuario);
         return ResponseEntity.noContent().build();
     }
 }

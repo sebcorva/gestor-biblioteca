@@ -2,6 +2,7 @@ package com.duoc.gestor_biblioteca.service;
 
 import java.util.List;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import com.duoc.gestor_biblioteca.dto.PublicacionRequest;
@@ -9,6 +10,7 @@ import com.duoc.gestor_biblioteca.dto.PublicacionResponse;
 import com.duoc.gestor_biblioteca.exception.RecursoNoEncontradoException;
 import com.duoc.gestor_biblioteca.model.Publicacion;
 import com.duoc.gestor_biblioteca.repository.PublicacionRepository;
+import com.duoc.gestor_biblioteca.security.UsuarioAutenticado;
 
 import lombok.RequiredArgsConstructor;
 
@@ -48,21 +50,29 @@ public class PublicacionServiceImpl implements PublicacionService {
     }
 
     @Override
-    public PublicacionResponse updatePublicacion(Long id, PublicacionRequest publicacionRequest) {
+    public PublicacionResponse updatePublicacion(Long id, PublicacionRequest publicacionRequest,
+            UsuarioAutenticado usuario) {
+
         Publicacion publicacion = buscarPorId(id);
-        // Solo los campos editables: usuarioId, usuarioNombre y fechaPublicacion no se
-        // tocan
+        if (!esDueno(publicacion, usuario)) {
+            throw new AccessDeniedException("Solo el autor puede editar esta publicacion");
+        }
         copiarCampos(publicacionRequest, publicacion);
 
         return PublicacionResponse.from(publicacionRepository.save(publicacion));
     }
 
     @Override
-    public void deletePublicacion(Long id) {
-        if (!publicacionRepository.existsById(id)) {
-            throw new RecursoNoEncontradoException("No existe la publicacion con id " + id);
+    public void deletePublicacion(Long id, UsuarioAutenticado usuario) {
+        Publicacion publicacion = buscarPorId(id);
+        if (!esDueno(publicacion, usuario) && !usuario.esAdmin()) {
+            throw new AccessDeniedException("Solo el autor o un administrador pueden eliminar esta publicacion");
         }
-        publicacionRepository.deleteById(id);
+        publicacionRepository.delete(publicacion);
+    }
+
+    private boolean esDueno(Publicacion publicacion, UsuarioAutenticado usuario) {
+        return publicacion.getUsuarioId().equals(usuario.id());
     }
 
     private Publicacion buscarPorId(Long id) {

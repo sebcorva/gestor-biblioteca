@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.duoc.gestor_biblioteca.dto.PublicacionRequest;
@@ -27,10 +28,13 @@ public class PublicacionController {
 
     private final PublicacionService publicacionService;
 
+    // GET /publicaciones        -> todas
+    // GET /publicaciones?q=cien -> busqueda en titulo o autor
     @GetMapping
-    public ResponseEntity<List<PublicacionResponse>> getAllPublicaciones() {
-        List<PublicacionResponse> publicacion = publicacionService.getAllPublicaciones();
-        return ResponseEntity.ok(publicacion);
+    public ResponseEntity<List<PublicacionResponse>> getAllPublicaciones(
+            @RequestParam(required = false) String q) {
+        List<PublicacionResponse> publicaciones = publicacionService.getAllPublicaciones(q);
+        return ResponseEntity.ok(publicaciones);
     }
 
     @GetMapping("/{id}")

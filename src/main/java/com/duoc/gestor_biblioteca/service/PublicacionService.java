@@ -7,7 +7,7 @@ import com.duoc.gestor_biblioteca.dto.PublicacionResponse;
 
 public interface PublicacionService {
 
-    List<PublicacionResponse> getAllPublicaciones();
+    List<PublicacionResponse> getAllPublicaciones(String q);
 
     PublicacionResponse getPublicacionById(Long id);
 

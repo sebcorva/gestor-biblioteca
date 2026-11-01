@@ -19,9 +19,12 @@ public class PublicacionServiceImpl implements PublicacionService {
     private final PublicacionRepository publicacionRepository;
 
     @Override
-    public List<PublicacionResponse> getAllPublicaciones() {
-        return publicacionRepository.findAll()
-                .stream()
+    public List<PublicacionResponse> getAllPublicaciones(String q) {
+        List<Publicacion> publicaciones = (q == null || q.isBlank())
+                ? publicacionRepository.findAllByOrderByFechaPublicacionDesc()
+                : publicacionRepository.buscar(q.trim());
+
+        return publicaciones.stream()
                 .map(PublicacionResponse::from)
                 .toList();
     }

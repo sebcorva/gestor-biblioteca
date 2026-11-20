@@ -29,6 +29,10 @@ bin/
 .env
 *.log
 
+# Credenciales y wallet de Oracle: nunca a git
+wallet/
+Wallet_*/
+
 # Archivo comprimido original del Wallet (opcional, para no subir el .zip pesado)
 *.zip
 

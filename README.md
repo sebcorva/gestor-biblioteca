@@ -26,7 +26,14 @@ Postman ── POST /auth/login ──► auth-users (8081) ── emite el JWT
 
 ## Cómo ejecutar
 
-La wallet de Oracle (`src/main/resources/wallet/`) y la configuración (`application.properties`) vienen incluidas en el repositorio, así que no hace falta configurar nada.
+Las credenciales **no están en el repositorio**: `application.properties` las lee de variables de entorno.
+
+1. Descomprimir la wallet de Oracle en la carpeta `wallet/` de la raíz del proyecto (`tnsnames.ora` debe quedar en `wallet/tnsnames.ora`).
+2. Copiar `.env.example` a `.env` y completar `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` y `JWT_SECRET` (el mismo de auth-users). Spring lee el `.env` automáticamente (`spring.config.import`).
+
+`wallet/` y `.env` están en `.gitignore`. En AWS, los mismos valores vienen de Secrets Manager.
+
+Luego:
 
 1. Levantar **auth-users** primero (para poder hacer login y obtener tokens):
    ```bash

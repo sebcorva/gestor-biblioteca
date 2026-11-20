@@ -36,6 +36,8 @@ public class SecurityConfig {
                         // Pagina de error interna de Spring: si no es publica, un error real se ve como
                         // 401
                         .requestMatchers("/error").permitAll()
+                        // Health check del despliegue (Nginx no publica /actuator; solo se consulta dentro de la EC2)
+                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                         // POST, PUT y DELETE (y cualquier otra ruta) requieren token
                         .anyRequest().authenticated())
                 // Sin token o con token invalido en una ruta protegida -> 401 (en vez de

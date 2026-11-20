@@ -29,7 +29,20 @@
 	<properties>
 		<java.version>17</java.version>
 		<jjwt.version>0.12.6</jjwt.version>
+		<aws-sdk.version>2.31.54</aws-sdk.version>
 	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws-sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -84,6 +97,16 @@
 		    <groupId>com.oracle.database.security</groupId>
 		    <artifactId>oraclepki</artifactId>
 		    <scope>runtime</scope>
+		</dependency>
+		<!-- Descarga la wallet de Oracle desde S3 al arrancar en AWS (OracleWalletBootstrap) -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+		</dependency>
+		<!-- /actuator/health: health check del despliegue en EC2 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		<!-- Spring Security + JWT -->
 		<dependency>

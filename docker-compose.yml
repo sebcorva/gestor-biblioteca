@@ -1,0 +1,11 @@
+services:
+  gestor-biblioteca:
+    build: .
+    ports:
+      - "8080:8080"
+    # Copia .env.example a .env y completa los datos (el .env no se sube a git).
+    # DB_URL con TNS_ADMIN=./wallet funciona igual aqui: en el contenedor ./wallet = /app/wallet.
+    env_file: .env
+    volumes:
+      - ./wallet:/app/wallet:ro
+    restart: always

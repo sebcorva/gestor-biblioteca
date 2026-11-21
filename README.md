@@ -23,6 +23,7 @@ Postman ── POST /auth/login ──► auth-users (8081) ── emite el JWT
 - JJWT 0.12.6 (solo validación de tokens HS256)
 - Oracle Autonomous Database (conexión con wallet)
 - Lombok
+- Docker, GitHub Actions y AWS (ECR, EC2, Systems Manager, Secrets Manager y S3)
 
 ## Cómo ejecutar
 
@@ -37,7 +38,7 @@ Luego:
 
 1. Levantar **auth-users** primero (para poder hacer login y obtener tokens):
    ```bash
-   cd auth-users
+   cd auth_service
    ./mvnw spring-boot:run
    ```
 2. Levantar el foro:
@@ -47,6 +48,28 @@ Luego:
    ```
 
 La API queda disponible en `http://localhost:8080`. Las tablas se crean solas al arrancar (`ddl-auto=update`).
+
+## Tests
+
+```bash
+./mvnw test
+```
+
+Los 32 tests usan **H2 en memoria** (perfil `test`), así que no necesitan Oracle, la wallet ni el `.env`. Cubren los servicios de publicaciones y comentarios, la persistencia, la matriz de permisos completa (con tokens generados en el test) y las clases de la wallet. El workflow de GitHub Actions los ejecuta antes de construir la imagen: si alguno falla, no se despliega.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+`docker-compose.yml` construye la imagen con el `Dockerfile` (Temurin 17), usa el mismo `.env` y monta `./wallet` en `/app/wallet` en modo solo lectura. Para comprobar que levantó:
+
+```bash
+curl http://localhost:8080/actuator/health   # {"status":"UP"}
+```
+
+Actuator expone **solo** `/actuator/health`, que el despliegue usa como health check.
 
 ## Usuarios de prueba
 
@@ -245,11 +268,74 @@ En la publicación 3, con el token de **premium**:
 
 No incluye datos: las publicaciones y comentarios se crean con la API (paso a paso arriba), porque el autor sale del JWT. No hay FK hacia `usuarios`: ese dato vive en el otro microservicio y el foro guarda `usuario_id` y `usuario_nombre` como copia.
 
+## Despliegue en AWS
+
+El microservicio corre como contenedor en una EC2 compartida con el otro microservicio y el front. Nginx publica las rutas en el puerto 80:
+
+```
+EC2 · Nginx :80
+  ├─ /auth, /usuarios, /pagos      → auth-users        127.0.0.1:8081
+  ├─ /publicaciones, /comentarios  → gestor-biblioteca 127.0.0.1:8080
+  └─ /                             → front Angular     127.0.0.1:4000
+```
+
+La plantilla de CloudFormation de la EC2 y la guía completa paso a paso están en el repo del front: [`DESPLIEGUE.md`](https://github.com/sebcorva/gestor-libros-front-aws/blob/main/DESPLIEGUE.md).
+
+### Qué pasa en cada push a `main`
+
+El workflow [`.github/workflows/publish-ecr.yml`](.github/workflows/publish-ecr.yml) (*Test, publish and deploy gestor-biblioteca to EC2*) tiene dos jobs:
+
+1. **Test y publicación:** corre `./mvnw test`, construye la imagen y la sube a ECR como `gestor-biblioteca:<sha del commit>`. Si el repositorio de ECR no existe, lo crea.
+2. **Despliegue por Systems Manager (SSM):** sin SSH, ejecuta [`ec2/deploy-api.sh`](ec2/deploy-api.sh) dentro de la EC2. El script:
+   - lee las credenciales desde Secrets Manager;
+   - descarga la imagen nueva y reemplaza el contenedor `gestor-biblioteca`, publicado solo en `127.0.0.1:8080`;
+   - espera a que `/actuator/health` responda `UP`. Si no lo logra, muestra los errores del contenedor y **restaura el contenedor anterior** (rollback).
+
+   Después, [`ec2/deploy-to-instance.sh`](ec2/deploy-to-instance.sh) hace un smoke test desde fuera: `GET http://<IP>/publicaciones` debe responder **200** con un arreglo JSON.
+
+También se puede lanzar a mano desde **Actions → Run workflow**.
+
+### Credenciales en AWS
+
+En AWS no se usa `.env`. Las credenciales viven en el secreto **`libros/gestor-biblioteca`** de Secrets Manager (tipo clave/valor):
+
+| Clave | Valor |
+|---|---|
+| `DB_URL` | Alias del `tnsnames.ora` |
+| `DB_USERNAME` | `FORO_APP` |
+| `DB_PASSWORD` | Contraseña de `FORO_APP` |
+| `JWT_SECRET` | **El mismo valor** que en `libros/auth-users`. Si difiere, publicar y comentar responden 401 |
+
+`DB_URL` puede ser solo el **alias** del `tnsnames.ora` (por ejemplo `midb_high`): `OracleJdbcUrl` lo completa como `jdbc:oracle:thin:@<alias>?TNS_ADMIN=/app/wallet`.
+
+### Wallet desde S3
+
+La wallet tampoco va en la imagen. Al arrancar, `OracleWalletBootstrap` descarga el ZIP desde S3 (`ORACLE_WALLET_S3_BUCKET` / `ORACLE_WALLET_S3_KEY`) y lo descomprime en `/app/wallet`. Si esas variables no existen, como en local, no hace nada y se usa la carpeta `./wallet`.
+
+### Configuración en GitHub
+
+En **Settings → Secrets and variables → Actions**:
+
+| Tipo | Nombre | Valor |
+|---|---|---|
+| Secret | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | Credenciales de la sesión de AWS Academy (vencen con la sesión) |
+| Variable | `AWS_REGION` | `us-east-1` |
+| Variable | `EC2_INSTANCE_ID` | Output `InstanceId` del stack |
+| Variable | `ORACLE_CREDENTIALS_SECRET_ARN` | ARN completo de `libros/gestor-biblioteca` |
+| Variable | `ORACLE_WALLET_S3_BUCKET` | Output `WalletBucketName` del stack (no el nombre del stack) |
+| Variable | `ORACLE_WALLET_S3_KEY` | Output `WalletObjectKey` (por ejemplo `Wallet.zip`) |
+
+Se despliega **después de auth-users** y antes del front, porque el smoke test del front consulta `/publicaciones`.
+
+### Probar el despliegue
+
+La colección Postman sirve igual contra AWS: en las variables de la colección cambia `baseUsuarios` y `baseForo` por `http://<IP pública de la EC2>` (Nginx enruta cada ruta a su microservicio).
+
 ## Estructura
 
 ```
 src/main/java/com/duoc/gestor_biblioteca/
-├── config/        SecurityConfig
+├── config/        SecurityConfig, OracleWalletBootstrap, OracleJdbcUrl
 ├── controller/    PublicacionController, ComentarioController
 ├── dto/           Records de request y response (con static from())
 ├── exception/     Excepciones propias y GlobalExceptionHandler
@@ -258,3 +344,13 @@ src/main/java/com/duoc/gestor_biblioteca/
 ├── security/      JwtService (solo valida), JwtAuthFilter, UsuarioAutenticado
 └── service/       Interfaces e implementaciones (Publicacion, Comentario)
 ```
+
+```
+Dockerfile, docker-entrypoint.sh, docker-compose.yml   Imagen y ejecución local con Docker
+.github/workflows/publish-ecr.yml                      Test → ECR → despliegue en EC2
+ec2/deploy-api.sh, ec2/deploy-to-instance.sh           Despliegue dentro de la EC2 y smoke test
+```
+
+## Créditos
+
+El `Dockerfile`, `docker-entrypoint.sh`, el workflow de GitHub Actions, los scripts de `ec2/` y las clases `OracleWalletBootstrap` y `OracleJdbcUrl` (con sus tests) se basan en el repositorio del profesor [cvalverd/pet-api-oracle](https://github.com/cvalverd/pet-api-oracle), adaptados a este microservicio.
